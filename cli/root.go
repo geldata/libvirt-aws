@@ -1,9 +1,10 @@
 package cli
 
 import (
-	"github.com/rs/zerolog/log"
 	"os"
+
 	"github.com/rs/zerolog"
+	"github.com/rs/zerolog/log"
 	"github.com/spf13/cobra"
 )
 
@@ -14,7 +15,6 @@ var rootCmd = &cobra.Command{
 }
 
 func init() {
-	zerolog.TimeFieldFormat = zerolog.TimeFormatUnix
 	log.Logger = log.Output(zerolog.ConsoleWriter{Out: os.Stderr})
 }
 
