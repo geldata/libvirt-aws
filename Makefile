@@ -13,3 +13,6 @@ test:
 
 vet:
 	go vet ./...
+
+integration:
+	go test -v -tags=integration ./...

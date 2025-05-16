@@ -7,8 +7,8 @@ import (
 	"github.com/geldata/libvirt-aws/awsapi"
 )
 
-func (s *AWSEmulatorServer) registerRoutes() {
-	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+func (s *AWSEmulatorServer) registerRoutes(mux *http.ServeMux) {
+	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		action := r.FormValue("Action")
 		if action == "" {
 			http.Error(w, "The action parameter is required", http.StatusBadRequest)
@@ -22,5 +22,9 @@ func (s *AWSEmulatorServer) registerRoutes() {
 			http.Error(w, fmt.Sprintf("The action %s is not valid for this web service.", action), http.StatusBadRequest)
 			return
 		}
+	})
+	mux.HandleFunc("/healthz", func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		w.Write([]byte("ok"))
 	})
 }

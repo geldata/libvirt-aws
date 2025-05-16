@@ -1,9 +1,12 @@
 package server
 
 import (
+	"context"
 	"fmt"
 	"net/http"
 	"os"
+	"os/signal"
+	"time"
 
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
@@ -11,7 +14,8 @@ import (
 )
 
 const (
-	DefaultPort = 5100
+	DefaultPort     = 5100
+	TimeFieldFormat = "2006-01-02T15:04:05.000Z"
 )
 
 type AWSEmulatorServerOpts struct {
@@ -27,6 +31,7 @@ type AWSEmulatorServer struct {
 	Addr   string
 	Debug  bool
 	Region string
+	stop   chan os.Signal
 }
 
 func NewAWSEmulatorServerOpts(fs *pflag.FlagSet) *AWSEmulatorServerOpts {
@@ -86,7 +91,11 @@ func NewAWSEmulatorServer(opts *AWSEmulatorServerOpts) *AWSEmulatorServer {
 }
 
 func (s *AWSEmulatorServer) configureLogger() {
-	zerolog.TimeFieldFormat = zerolog.TimeFormatUnix
+	zerolog.TimeFieldFormat = TimeFieldFormat
+	zerolog.TimestampFunc = func() time.Time {
+		return time.Now().UTC()
+	}
+
 	zerolog.SetGlobalLevel(zerolog.InfoLevel)
 	if s.Debug {
 		zerolog.SetGlobalLevel(zerolog.DebugLevel)
@@ -96,11 +105,29 @@ func (s *AWSEmulatorServer) configureLogger() {
 
 func (s *AWSEmulatorServer) Start() error {
 	s.configureLogger()
-	s.registerRoutes()
-	log.Info().Msgf("starting server at %s", s.Addr)
-	err := http.ListenAndServe(s.Addr, nil)
-	if err != nil {
-		log.Fatal().Err(err).Msgf("failed to start server at %s", s.Addr)
+	mux := http.NewServeMux()
+	s.registerRoutes(mux)
+	srv := &http.Server{
+		Addr:    s.Addr,
+		Handler: mux,
 	}
+	stopChan := make(chan os.Signal, 1)
+	s.stop = stopChan
+	signal.Notify(s.stop, os.Interrupt)
+	go func() {
+		log.Info().Msgf("starting server at %s", s.Addr)
+		if err := srv.ListenAndServe(); err != http.ErrServerClosed {
+			log.Fatal().Err(err).Msgf("failed to start server at %s", s.Addr)
+		}
+	}()
+	<-s.stop
+	log.Info().Msg("shutting down server")
+	srv.Shutdown(context.Background())
 	return nil
+}
+
+func (s *AWSEmulatorServer) Stop() {
+	log.Info().Msg("sending server interrupt signal")
+	s.stop <- os.Interrupt
+	close(s.stop)
 }
