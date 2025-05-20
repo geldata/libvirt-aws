@@ -16,6 +16,16 @@ type DBOpts struct {
 	Config           *gorm.Config
 }
 
+func DefaultDBOpts() *DBOpts {
+	return &DBOpts{
+		DBFile:           "pool.db",
+		EnableGormLogger: false,
+		Config: &gorm.Config{
+			Logger: logger.Discard,
+		},
+	}
+}
+
 func NewDBOpts(fs *pflag.FlagSet) *DBOpts {
 	var err error
 	opts := &DBOpts{}

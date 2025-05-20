@@ -34,9 +34,11 @@ func TestDescribeAvailabilityZonesIntegration(t *testing.T) {
 	port := getPort()
 	addr := fmt.Sprintf("http://localhost:%d/", port)
 	opts := &AWSEmulatorServerOpts{
-		Port: port,
+		Port:   port,
+		DBOpts: testDBOpts(),
 	}
-	server := NewAWSEmulatorServer(getTestDB(), opts)
+	server, err := NewAWSEmulatorServer(opts)
+	assert.NoError(t, err)
 	go server.Start()
 
 	// make a request to healthz to wait for the server to start
@@ -80,8 +82,10 @@ func TestDescribeAvailabilityZonesCustomRegionIntegration(t *testing.T) {
 	opts := &AWSEmulatorServerOpts{
 		Port:   port,
 		Region: region,
+		DBOpts: testDBOpts(),
 	}
-	server := NewAWSEmulatorServer(getTestDB(), opts)
+	server, err := NewAWSEmulatorServer(opts)
+	assert.NoError(t, err)
 	go server.Start()
 
 	// make a request to healthz to wait for the server to start

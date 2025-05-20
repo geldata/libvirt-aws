@@ -8,10 +8,11 @@ import (
 	"os/signal"
 	"time"
 
+	"github.com/geldata/libvirt-aws/awsapi"
+	"github.com/geldata/libvirt-aws/db"
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
 	"github.com/spf13/pflag"
-	"gorm.io/gorm"
 )
 
 const (
@@ -24,19 +25,17 @@ type AWSEmulatorServerOpts struct {
 	Port   int
 	Debug  bool
 	Region string // AWS region to pretend to be in
+	DBOpts *db.DBOpts
 }
 
 type AWSEmulatorServer struct {
-	BindTo string
-	Port   int
+	Opts   *AWSEmulatorServerOpts
 	Addr   string
-	Debug  bool
-	Region string
 	stop   chan os.Signal
-	db     *gorm.DB
+	awsapi *awsapi.AWSAPI
 }
 
-func NewAWSEmulatorServerOpts(fs *pflag.FlagSet) *AWSEmulatorServerOpts {
+func newAWSEmulatorServerOpts(fs *pflag.FlagSet) *AWSEmulatorServerOpts {
 	var err error
 	opts := &AWSEmulatorServerOpts{}
 	opts.BindTo, err = fs.GetString("bind-to")
@@ -54,6 +53,15 @@ func NewAWSEmulatorServerOpts(fs *pflag.FlagSet) *AWSEmulatorServerOpts {
 	opts.Region, err = fs.GetString("region")
 	if err != nil {
 		log.Fatal().Err(err).Msg("failed to get region flag")
+	}
+	opts.DBOpts = db.DefaultDBOpts()
+	opts.DBOpts.DBFile, err = fs.GetString("database")
+	if err != nil {
+		log.Fatal().Err(err).Msg("failed to get database flag")
+	}
+	opts.DBOpts.EnableGormLogger, err = fs.GetBool("debug")
+	if err != nil {
+		log.Fatal().Err(err).Msg("failed to get debug flag")
 	}
 	return opts
 }
@@ -78,20 +86,31 @@ func mergeAWSEmulatorServerOpts(opts *AWSEmulatorServerOpts) *AWSEmulatorServerO
 	if opts.Region == "" {
 		opts.Region = defaultOpts.Region
 	}
+	if opts.DBOpts == nil {
+		opts.DBOpts = db.DefaultDBOpts()
+	}
 	return opts
 }
 
-func NewAWSEmulatorServer(db *gorm.DB, opts *AWSEmulatorServerOpts) *AWSEmulatorServer {
+func NewAWSEmulatorServer(opts *AWSEmulatorServerOpts) (*AWSEmulatorServer, error) {
 	opts = mergeAWSEmulatorServerOpts(opts)
-	return &AWSEmulatorServer{
-		BindTo: opts.BindTo,
-		Port:   opts.Port,
-		Addr:   fmt.Sprintf("%s:%d", opts.BindTo, opts.Port),
-		Debug:  opts.Debug,
-		Region: opts.Region,
-		stop:   make(chan os.Signal, 1),
-		db:     db,
+	db, err := db.NewDB(opts.DBOpts)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create database: %w", err)
 	}
+	api := awsapi.NewAWSAPI(db, opts.Region)
+	return &AWSEmulatorServer{
+		Opts:   opts,
+		Addr:   fmt.Sprintf("%s:%d", opts.BindTo, opts.Port),
+		stop:   make(chan os.Signal, 1),
+		awsapi: api,
+	}, nil
+}
+
+func NewAWSEmulatorServerFromFlags(fs *pflag.FlagSet) (*AWSEmulatorServer, error) {
+	opts := newAWSEmulatorServerOpts(fs)
+	opts.DBOpts = db.NewDBOpts(fs)
+	return NewAWSEmulatorServer(opts)
 }
 
 func (s *AWSEmulatorServer) configureLogger() {
@@ -101,10 +120,11 @@ func (s *AWSEmulatorServer) configureLogger() {
 	}
 
 	zerolog.SetGlobalLevel(zerolog.InfoLevel)
-	if s.Debug {
-		zerolog.SetGlobalLevel(zerolog.DebugLevel)
-	}
 	log.Logger = zerolog.New(os.Stderr).With().Str("svc", "awsapi").Logger()
+	if s.Opts.Debug {
+		zerolog.SetGlobalLevel(zerolog.DebugLevel)
+		log.Debug().Msg("debug logging enabled")
+	}
 }
 
 func (s *AWSEmulatorServer) Start() error {
