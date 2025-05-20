@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"github.com/geldata/libvirt-aws/db"
 	"github.com/geldata/libvirt-aws/server"
 	"github.com/rs/zerolog/log"
 	"github.com/spf13/cobra"
@@ -11,9 +12,14 @@ var startCmd = &cobra.Command{
 	Short: "Starts the libvirt-aws emulator server",
 	Long:  "Starts the libvirt-aws emulator server",
 	Run: func(cmd *cobra.Command, args []string) {
-		opts := server.NewAWSEmulatorServerOpts(cmd.Flags())
-		log.Info().Msg("Starting libvirt-aws server...")
-		server.NewAWSEmulatorServer(opts).Start()
+		srvOpts := server.NewAWSEmulatorServerOpts(cmd.Flags())
+		dbOpts := db.NewDBOpts(cmd.Flags())
+		db, err := db.NewDB(dbOpts)
+		if err != nil {
+			log.Fatal().Err(err).Msg("failed to create database")
+		}
+		log.Info().Msg("starting libvirt-aws server...")
+		server.NewAWSEmulatorServer(db, srvOpts).Start()
 	},
 }
 

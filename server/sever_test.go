@@ -2,14 +2,28 @@ package server
 
 import (
 	"fmt"
+	"log"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
 	"testing"
 
 	"github.com/geldata/libvirt-aws/awsapi"
+	"github.com/geldata/libvirt-aws/db"
 	"github.com/stretchr/testify/assert"
+	"gorm.io/gorm"
 )
+
+func getTestDB() *gorm.DB {
+	db, err := db.NewDB(&db.DBOpts{
+		DBFile: ":memory:",
+		Config: &gorm.Config{},
+	})
+	if err != nil {
+		log.Fatalf("failed to open test database: %v", err)
+	}
+	return db
+}
 
 func TestNewAWSEmulatorServer(t *testing.T) {
 	tests := []struct {
@@ -45,10 +59,15 @@ func TestNewAWSEmulatorServer(t *testing.T) {
 			},
 		},
 	}
+	testDB := getTestDB()
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := NewAWSEmulatorServer(tt.opts)
-			assert.Equal(t, tt.want, got)
+			got := NewAWSEmulatorServer(testDB, tt.opts)
+			assert.Equal(t, tt.want.BindTo, got.BindTo)
+			assert.Equal(t, tt.want.Port, got.Port)
+			assert.Equal(t, tt.want.Addr, got.Addr)
+			assert.Equal(t, tt.want.Debug, got.Debug)
+			assert.Equal(t, tt.want.Region, got.Region)
 		})
 	}
 }
@@ -69,14 +88,14 @@ func TestDescribeAvailabilityZones(t *testing.T) {
 			wantRegion: "us-east-2",
 		},
 	}
-
+	testDB := getTestDB()
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			form := url.Values{}
 			form.Set("Action", "DescribeAvailabilityZones")
 			form.Set("Version", "2016-11-15")
 			w := httptest.NewRecorder()
-			s := NewAWSEmulatorServer(&AWSEmulatorServerOpts{
+			s := NewAWSEmulatorServer(testDB, &AWSEmulatorServerOpts{
 				Region: tt.region,
 			})
 			awsapi.DescribeAvailabilityZones(s.Region, w, nil)

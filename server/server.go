@@ -11,6 +11,7 @@ import (
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
 	"github.com/spf13/pflag"
+	"gorm.io/gorm"
 )
 
 const (
@@ -32,6 +33,7 @@ type AWSEmulatorServer struct {
 	Debug  bool
 	Region string
 	stop   chan os.Signal
+	db     *gorm.DB
 }
 
 func NewAWSEmulatorServerOpts(fs *pflag.FlagSet) *AWSEmulatorServerOpts {
@@ -79,7 +81,7 @@ func mergeAWSEmulatorServerOpts(opts *AWSEmulatorServerOpts) *AWSEmulatorServerO
 	return opts
 }
 
-func NewAWSEmulatorServer(opts *AWSEmulatorServerOpts) *AWSEmulatorServer {
+func NewAWSEmulatorServer(db *gorm.DB, opts *AWSEmulatorServerOpts) *AWSEmulatorServer {
 	opts = mergeAWSEmulatorServerOpts(opts)
 	return &AWSEmulatorServer{
 		BindTo: opts.BindTo,
@@ -87,6 +89,8 @@ func NewAWSEmulatorServer(opts *AWSEmulatorServerOpts) *AWSEmulatorServer {
 		Addr:   fmt.Sprintf("%s:%d", opts.BindTo, opts.Port),
 		Debug:  opts.Debug,
 		Region: opts.Region,
+		stop:   make(chan os.Signal, 1),
+		db:     db,
 	}
 }
 
@@ -111,8 +115,6 @@ func (s *AWSEmulatorServer) Start() error {
 		Addr:    s.Addr,
 		Handler: mux,
 	}
-	stopChan := make(chan os.Signal, 1)
-	s.stop = stopChan
 	signal.Notify(s.stop, os.Interrupt)
 	go func() {
 		log.Info().Msgf("starting server at %s", s.Addr)
