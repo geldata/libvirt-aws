@@ -3,8 +3,6 @@ package server
 import (
 	"fmt"
 	"net/http"
-
-	"github.com/geldata/libvirt-aws/awsapi"
 )
 
 func (s *AWSEmulatorServer) registerRoutes(mux *http.ServeMux) {
@@ -16,7 +14,7 @@ func (s *AWSEmulatorServer) registerRoutes(mux *http.ServeMux) {
 		}
 		switch action {
 		case "DescribeAvailabilityZones":
-			awsapi.DescribeAvailabilityZones(s.Region, w, r)
+			s.awsapi.DescribeAvailabilityZones(w, r)
 			return
 		default:
 			http.Error(w, fmt.Sprintf("The action %s is not valid for this web service.", action), http.StatusBadRequest)

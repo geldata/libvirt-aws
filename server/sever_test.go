@@ -1,15 +1,20 @@
 package server
 
 import (
-	"fmt"
-	"net/http"
-	"net/http/httptest"
-	"net/url"
 	"testing"
 
-	"github.com/geldata/libvirt-aws/awsapi"
+	"github.com/geldata/libvirt-aws/db"
+	"github.com/spf13/pflag"
 	"github.com/stretchr/testify/assert"
+	"gorm.io/gorm"
 )
+
+func testDBOpts() *db.DBOpts {
+	return &db.DBOpts{
+		DBFile: ":memory:",
+		Config: &gorm.Config{},
+	}
+}
 
 func TestNewAWSEmulatorServer(t *testing.T) {
 	tests := []struct {
@@ -19,13 +24,21 @@ func TestNewAWSEmulatorServer(t *testing.T) {
 	}{
 		{
 			name: "default options",
-			opts: &AWSEmulatorServerOpts{},
-			want: &AWSEmulatorServer{
+			opts: &AWSEmulatorServerOpts{
 				BindTo: "",
 				Port:   5100,
-				Addr:   ":5100",
 				Debug:  false,
 				Region: "us-east-2",
+				DBOpts: testDBOpts(),
+			},
+			want: &AWSEmulatorServer{
+				Addr: ":5100",
+				Opts: &AWSEmulatorServerOpts{
+					BindTo: "",
+					Port:   5100,
+					Debug:  false,
+					Region: "us-east-2",
+				},
 			},
 		},
 		{
@@ -35,58 +48,72 @@ func TestNewAWSEmulatorServer(t *testing.T) {
 				Port:   9090,
 				Debug:  true,
 				Region: "us-west-2",
+				DBOpts: testDBOpts(),
 			},
 			want: &AWSEmulatorServer{
-				BindTo: "169.254.169.254",
-				Port:   9090,
-				Addr:   "169.254.169.254:9090",
-				Debug:  true,
-				Region: "us-west-2",
+				Addr: "169.254.169.254:9090",
+				Opts: &AWSEmulatorServerOpts{
+					BindTo: "169.254.169.254",
+					Port:   9090,
+					Debug:  true,
+					Region: "us-west-2",
+				},
 			},
 		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := NewAWSEmulatorServer(tt.opts)
-			assert.Equal(t, tt.want, got)
+			got, err := NewAWSEmulatorServer(tt.opts)
+			assert.NoError(t, err)
+			assert.Equal(t, tt.want.Opts.BindTo, got.Opts.BindTo)
+			assert.Equal(t, tt.want.Opts.Port, got.Opts.Port)
+			assert.Equal(t, tt.want.Opts.Debug, got.Opts.Debug)
+			assert.Equal(t, tt.want.Opts.Region, got.Opts.Region)
+			assert.Equal(t, tt.want.Addr, got.Addr)
 		})
 	}
 }
 
-func TestDescribeAvailabilityZones(t *testing.T) {
+func TestNewAWSEmulatorServerFromFlags(t *testing.T) {
 	tests := []struct {
-		name       string
-		region     string
-		wantRegion string
+		name string
+		fs   *pflag.FlagSet
+		want *AWSEmulatorServer
 	}{
 		{
-			name:       "canada central 1",
-			region:     "ca-central-1",
-			wantRegion: "ca-central-1",
-		},
-		{
-			name:       "no region",
-			wantRegion: "us-east-2",
+			name: "custom options",
+			fs: func() *pflag.FlagSet {
+				fs := pflag.NewFlagSet("test", pflag.ContinueOnError)
+				fs.String("database", ":memory:", "custom database file")
+				fs.Bool("debug", false, "enable gorm logger")
+				fs.String("bind-to", "33.33.33.33", "bind to address")
+				fs.Int("port", 8080, "port to listen on")
+				fs.String("region", "us-west-2", "AWS region")
+				return fs
+			}(),
+			want: &AWSEmulatorServer{
+				Addr: "33.33.33.33:8080",
+				Opts: &AWSEmulatorServerOpts{
+					BindTo: "33.33.33.33",
+					Port:   8080,
+					Region: "us-west-2",
+					DBOpts: &db.DBOpts{
+						DBFile: ":memory:",
+					},
+				},
+			},
 		},
 	}
-
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			form := url.Values{}
-			form.Set("Action", "DescribeAvailabilityZones")
-			form.Set("Version", "2016-11-15")
-			w := httptest.NewRecorder()
-			s := NewAWSEmulatorServer(&AWSEmulatorServerOpts{
-				Region: tt.region,
-			})
-			awsapi.DescribeAvailabilityZones(s.Region, w, nil)
-			assert.Equal(t, http.StatusOK, w.Code)
-			assert.Contains(t, w.Body.String(), "<DescribeAvailabilityZonesResponse")
-			assert.Contains(t, w.Body.String(), fmt.Sprintf("<regionName>%s</regionName>", tt.wantRegion))
-			for _, suffix := range []string{"a", "b", "c"} {
-				assert.Contains(t, w.Body.String(), fmt.Sprintf("<zoneName>%s%s</zoneName>", tt.wantRegion, suffix))
-				assert.Contains(t, w.Body.String(), fmt.Sprintf("<zoneId>%s%s</zoneId>", tt.wantRegion, suffix))
-			}
+			got, err := NewAWSEmulatorServerFromFlags(tt.fs)
+			assert.NoError(t, err)
+			assert.Equal(t, tt.want.Opts.BindTo, got.Opts.BindTo)
+			assert.Equal(t, tt.want.Opts.Port, got.Opts.Port)
+			assert.Equal(t, tt.want.Opts.Region, got.Opts.Region)
+			assert.Equal(t, tt.want.Addr, got.Addr)
+			assert.Equal(t, tt.want.Opts.DBOpts.DBFile, got.Opts.DBOpts.DBFile)
+			assert.Equal(t, tt.want.Opts.DBOpts.EnableGormLogger, got.Opts.DBOpts.EnableGormLogger)
 		})
 	}
 }

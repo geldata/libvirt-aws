@@ -34,9 +34,11 @@ func TestDescribeAvailabilityZonesIntegration(t *testing.T) {
 	port := getPort()
 	addr := fmt.Sprintf("http://localhost:%d/", port)
 	opts := &AWSEmulatorServerOpts{
-		Port: port,
+		Port:   port,
+		DBOpts: testDBOpts(),
 	}
-	server := NewAWSEmulatorServer(opts)
+	server, err := NewAWSEmulatorServer(opts)
+	assert.NoError(t, err)
 	go server.Start()
 
 	// make a request to healthz to wait for the server to start
@@ -80,8 +82,10 @@ func TestDescribeAvailabilityZonesCustomRegionIntegration(t *testing.T) {
 	opts := &AWSEmulatorServerOpts{
 		Port:   port,
 		Region: region,
+		DBOpts: testDBOpts(),
 	}
-	server := NewAWSEmulatorServer(opts)
+	server, err := NewAWSEmulatorServer(opts)
+	assert.NoError(t, err)
 	go server.Start()
 
 	// make a request to healthz to wait for the server to start
@@ -100,7 +104,7 @@ func TestDescribeAvailabilityZonesCustomRegionIntegration(t *testing.T) {
 		o.BaseEndpoint = aws.String(addr)
 	})
 
-	t.Run("test describe azs", func(t *testing.T) {
+	t.Run("test describe azs custom region", func(t *testing.T) {
 		got, err := client.DescribeAvailabilityZones(context.Background(), &ec2.DescribeAvailabilityZonesInput{})
 		assert.NoError(t, err)
 		assert.Equal(t, len(got.AvailabilityZones), 3)

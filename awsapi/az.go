@@ -27,15 +27,15 @@ type AvailabilityZone struct {
 	GroupLongName      string `xml:"GroupLongName"`
 }
 
-func DescribeAvailabilityZones(region string, w http.ResponseWriter, r *http.Request) {
+func (a *AWSAPI) DescribeAvailabilityZones(w http.ResponseWriter, r *http.Request) {
 	azs := []*AvailabilityZone{}
 	for _, suffix := range []string{"a", "b", "c"} {
 		az := &AvailabilityZone{
 			OptInStatus: "opt-in-not-required",
-			ZoneName:    region + suffix,
-			ZoneID:      region + suffix,
+			ZoneName:    a.Region + suffix,
+			ZoneID:      a.Region + suffix,
 			ZoneState:   "available",
-			RegionName:  region,
+			RegionName:  a.Region,
 		}
 		azs = append(azs, az)
 	}

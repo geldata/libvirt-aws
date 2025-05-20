@@ -11,9 +11,14 @@ var startCmd = &cobra.Command{
 	Short: "Starts the libvirt-aws emulator server",
 	Long:  "Starts the libvirt-aws emulator server",
 	Run: func(cmd *cobra.Command, args []string) {
-		opts := server.NewAWSEmulatorServerOpts(cmd.Flags())
-		log.Info().Msg("Starting libvirt-aws server...")
-		server.NewAWSEmulatorServer(opts).Start()
+		log.Info().Msg("starting libvirt-aws server...")
+		srv, err := server.NewAWSEmulatorServerFromFlags(cmd.Flags())
+		if err != nil {
+			log.Fatal().Err(err).Msg("failed to create server")
+		}
+		if err := srv.Start(); err != nil {
+			log.Fatal().Err(err).Msg("failed to start server")
+		}
 	},
 }
 
