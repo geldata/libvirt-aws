@@ -8,7 +8,7 @@ Currently the only supported (and tested) OS is ubuntu 24.04
 
 ### Prerequisites
 
-You'll need to install and configure `libvirt` and `sqlite`. The start command can accept custom inputs for libvirt network name, image pool and uri and the sqlite database file.
+You'll need to install and configure `libvirt`. The start command can accept custom inputs for libvirt network name, image pool and uri.
 
 ### Building the binary
 
